@@ -1,38 +1,39 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 import io
-import base64
-import os
 
+# Import des solveurs
 from .static_solver import StaticSolver
 from .dynamic_solver import DynamicSolver
 from .stochastic_solver import StochasticSolver
 
 app = FastAPI(
-    title="Advanced Microeconomics Solver",
+    title="Advanced Microeconomics Solver API",
     version="1.0.0",
-    description="Solver symbolique généralisé pour l'optimisation microéconomique d'ordre n et temps t"
+    description="API backend pour le solver symbolique d'optimisation microéconomique",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# CORS
+# Configuration CORS - Autoriser le frontend déployé séparément
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",  # Dev frontend
+        "http://127.0.0.1:3000",  # Dev frontend
+        "https://advanced-microeconomics-solver.vercel.app",  # Production frontend
+        "https://*.vercel.app",  # Tous les sous-domaines Vercel
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-app.mount("/assets", StaticFiles(directory="frontend/assets"), name="assets")
 
 # Modèles Pydantic pour les requêtes
 class StaticOptions(BaseModel):
@@ -89,27 +90,37 @@ class PlotRequest(BaseModel):
     y_label: str = "f(x)"
     title: str = "Graph of function"
 
+# Routes de l'API
 @app.get("/")
-def read_root():
-    """Page d'accueil de l'API"""
+async def read_root():
+    """Page d'accueil de l'API backend"""
     return {
-        "message": "Advanced Microeconomics Solver API",
+        "message": "Advanced Microeconomics Solver API Backend",
         "version": "1.0.0",
+        "status": "online",
         "modules": ["statique", "dynamique", "stochastique"],
+        "documentation": "/docs",
         "endpoints": {
-            "statique": "/solve/static",
-            "dynamique": "/solve/dynamic", 
-            "stochastique": "/solve/stochastic",
+            "health": "/health",
+            "static": "/solve/static",
+            "dynamic": "/solve/dynamic", 
+            "stochastic": "/solve/stochastic",
             "monte_carlo": "/monte-carlo",
-            "symboles": "/generate/symbols",
-            "graphiques": "/plot/function"
+            "symbols": "/generate/symbols",
+            "plot": "/plot/function",
+            "modules": "/api/modules",
+            "utility_functions": "/api/utility-functions"
         }
     }
 
 @app.get("/health")
-def health():
+async def health():
     """Endpoint de santé de l'application"""
-    return {"status": "ok", "service": "Advanced Microeconomics Solver"}
+    return {
+        "status": "ok", 
+        "service": "Advanced Microeconomics Solver Backend",
+        "timestamp": __import__('datetime').datetime.now().isoformat()
+    }
 
 @app.post("/solve/static")
 async def solve_static(problem: StaticProblem):
@@ -127,7 +138,10 @@ async def solve_static(problem: StaticProblem):
         )
         return JSONResponse(content=result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur dans le module statique: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur dans le module statique: {str(e)}"
+        )
 
 @app.post("/solve/dynamic")
 async def solve_dynamic(problem: DynamicProblem):
@@ -147,7 +161,10 @@ async def solve_dynamic(problem: DynamicProblem):
         )
         return JSONResponse(content=result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur dans le module dynamique: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur dans le module dynamique: {str(e)}"
+        )
 
 @app.post("/solve/stochastic")
 async def solve_stochastic(problem: StochasticProblem):
@@ -165,7 +182,10 @@ async def solve_stochastic(problem: StochasticProblem):
         )
         return JSONResponse(content=result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur dans le module stochastique: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur dans le module stochastique: {str(e)}"
+        )
 
 @app.post("/monte-carlo")
 async def run_monte_carlo(request: MonteCarloRequest):
@@ -182,21 +202,27 @@ async def run_monte_carlo(request: MonteCarloRequest):
         )
         return JSONResponse(content=result)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur dans la simulation Monte Carlo: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur dans la simulation Monte Carlo: {str(e)}"
+        )
 
 @app.post("/generate/symbols")
 async def generate_symbols(request: SymbolGenerationRequest):
     """Generate symbolic variables x1, x2, ..., xn"""
     try:
         symbols = [f"{request.prefix}{i}" for i in range(request.start, request.start + request.n)]
-        return {
+        return JSONResponse(content={
             "symbols": symbols,
             "count": len(symbols),
             "prefix": request.prefix,
             "assume_positive": request.assume_positive
-        }
+        })
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur de génération de symboles: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur de génération de symboles: {str(e)}"
+        )
 
 @app.post("/plot/function")
 async def plot_function(request: PlotRequest):
@@ -223,61 +249,70 @@ async def plot_function(request: PlotRequest):
         plt.close()
         buf.seek(0)
         
-        return StreamingResponse(buf, media_type="image/png")
+        # Return base64 encoded image for JSON response
+        img_base64 = __import__('base64').b64encode(buf.getvalue()).decode()
+        return JSONResponse(content={
+            "success": True,
+            "plot": f"data:image/png;base64,{img_base64}",
+            "expression": request.expression
+        })
         
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur de génération de graphique: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Erreur de génération de graphique: {str(e)}"
+        )
 
 @app.get("/api/modules")
 async def get_modules():
     """Retourne la liste des modules disponibles"""
-    return {
+    return JSONResponse(content={
         "modules": [
             {
                 "name": "statique",
                 "description": "Optimisation microéconomique statique d'ordre n",
-                "endpoints": ["/solve/static"],
+                "endpoint": "/solve/static",
                 "problem_types": ["marshallian", "hicksian"],
                 "utility_functions": ["cobb-douglas", "leontief", "ces", "crra", "cara", "custom"]
             },
             {
                 "name": "dynamique", 
                 "description": "Optimisation intertemporelle d'ordre T",
-                "endpoints": ["/solve/dynamic"],
+                "endpoint": "/solve/dynamic",
                 "problem_types": ["discrete", "continuous"],
                 "horizons": ["finite", "infinite"]
             },
             {
                 "name": "stochastique",
                 "description": "Optimisation sous incertitude",
-                "endpoints": ["/solve/stochastic", "/monte-carlo"],
+                "endpoint": "/solve/stochastic",
                 "problem_types": ["markov", "vector"],
                 "methods": ["symbolic", "monte_carlo"]
             }
         ]
-    }
+    })
 
 @app.get("/api/utility-functions")
 async def get_utility_functions():
     """Retourne la liste des fonctions d'utilité supportées"""
-    return {
+    return JSONResponse(content={
         "utility_functions": [
             {
                 "name": "cobb-douglas",
                 "formula": "U = A * x₁^α₁ * x₂^α₂ * ... * xₙ^αₙ",
-                "parameters": ["A", "α₁", "α₂", ..., "αₙ"],
+                "parameters": ["A", "α₁", "α₂", "..."],
                 "properties": ["élasticité de substitution = 1", "demandes proportionnelles au revenu"]
             },
             {
                 "name": "leontief",
                 "formula": "U = min(x₁/a₁, x₂/a₂, ..., xₙ/aₙ)", 
-                "parameters": ["a₁", "a₂", ..., "aₙ"],
+                "parameters": ["a₁", "a₂", "..."],
                 "properties": ["compléments parfaits", "pas de substitution"]
             },
             {
                 "name": "ces",
                 "formula": "U = (α₁x₁^ρ + α₂x₂^ρ + ... + αₙxₙ^ρ)^(1/ρ)",
-                "parameters": ["ρ", "α₁", "α₂", ..., "αₙ"],
+                "parameters": ["ρ", "α₁", "α₂", "..."],
                 "properties": ["élasticité de substitution constante", "généralise Cobb-Douglas et Leontief"]
             },
             {
@@ -299,45 +334,93 @@ async def get_utility_functions():
                 "properties": ["flexibilité totale", "expression symbolique"]
             }
         ]
-    }
+    })
 
-@app.get("/frontend/{path:path}")
-async def serve_frontend(path: str):
-    """Servir les fichiers frontend"""
-    frontend_path = f"frontend/{path}"
-    
-    # Si le chemin est un dossier, servir index.html
-    if os.path.isdir(frontend_path):
-        index_path = os.path.join(frontend_path, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-    
-    # Si le fichier existe, le servir
-    if os.path.exists(frontend_path):
-        return FileResponse(frontend_path)
-    
-    # Sinon, servir la page d'accueil
-    return FileResponse("frontend/index.html")
+# Endpoint de test des solveurs
+@app.get("/api/test")
+async def test_solvers():
+    """Endpoint pour tester les solveurs"""
+    try:
+        # Test du solveur statique
+        static_solver = StaticSolver()
+        static_test = static_solver.solve(
+            problem_type="marshallian",
+            utility_type="cobb-douglas",
+            n_goods=2,
+            parameters={"alpha1": 0.3, "alpha2": 0.7},
+            constraints=[]
+        )
+        
+        # Test du solveur dynamique
+        dynamic_solver = DynamicSolver()
+        dynamic_test = dynamic_solver.solve(
+            problem_type="discrete",
+            T=3,
+            utility_expr="log(c)",
+            constraint_expr="k_next - (1-0.08)*k - k**0.33 + c",
+            parameters={"delta": 0.08, "alpha": 0.33},
+            beta=0.96
+        )
+        
+        return JSONResponse(content={
+            "static_solver": static_test.get("success", False),
+            "dynamic_solver": dynamic_test.get("success", False),
+            "status": "all_solvers_operational"
+        })
+        
+    except Exception as e:
+        return JSONResponse(content={
+            "error": str(e),
+            "status": "solvers_test_failed"
+        }, status_code=500)
 
 # Gestion des erreurs globales
 @app.exception_handler(500)
 async def internal_server_error_handler(request, exc):
     return JSONResponse(
         status_code=500,
-        content={"detail": "Erreur interne du serveur", "error": str(exc)}
+        content={
+            "detail": "Erreur interne du serveur",
+            "error": str(exc),
+            "endpoint": str(request.url)
+        }
     )
 
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
     return JSONResponse(
         status_code=404,
-        content={"detail": "Endpoint non trouvé"}
+        content={
+            "detail": "Endpoint non trouvé",
+            "endpoint": str(request.url),
+            "available_endpoints": [
+                "/",
+                "/health", 
+                "/solve/static",
+                "/solve/dynamic",
+                "/solve/stochastic",
+                "/api/modules",
+                "/api/utility-functions",
+                "/docs"
+            ]
+        }
     )
 
+@app.exception_handler(422)
+async def validation_error_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Erreur de validation des données",
+            "error": str(exc)
+        }
+    )
+
+# Point d'entrée pour Vercel
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "backend.main:app",
+        app, 
         host="0.0.0.0", 
         port=8000,
         reload=True,
