@@ -1,6 +1,15 @@
 fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
 sympy==1.12
+numpy==1.26.4
+scipy==1.13.0
+matplotlib==3.8.0
 pydantic==2.5.0
 python-multipart==0.0.6
-numpy==1.26.4
+pandas==2.2.0
+plotly==5.17.0
+aiofiles==23.2.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+setuptools==69.0.2
+wheel==0.42.0
