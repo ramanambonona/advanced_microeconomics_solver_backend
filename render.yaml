@@ -2,12 +2,11 @@ services:
   - type: web
     name: advanced-microeconomics-solver
     env: python
+    plan: free
     buildCommand: |
-      pip install --upgrade pip
-      python -V
-      pip -V
+      python -m pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.8
+        value: 3.11.9  # Version LTS stable et bien supportée
