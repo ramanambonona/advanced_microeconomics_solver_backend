@@ -1,0 +1,15 @@
+fastapi==0.115.2
+uvicorn[standard]==0.31.1
+python-multipart==0.0.12
+numpy==2.1.2
+sympy==1.13.3
+matplotlib==3.9.2
+pandas==2.2.3
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiofiles==24.1.0
+plotly==5.24.1
+pydantic==2.9.2
+pydantic-core==2.23.4
+setuptools>=75.2.0
+wheel>=0.44.0
